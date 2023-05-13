@@ -399,9 +399,9 @@ https://github.com/wlxklyh/FFMpegStudy/blob/master/win/Tutorial3
 
 #define SDL_AUDIO_BUFFER_SIZE 1024
 typedef struct PacketQueue {
-	AVPacketList *first_pkt, *last_pkt;
+	AVPacketList *first_pkt, *last_pkt;//AVPacketList，packet链表
 	int nb_packets;
-	int size;
+	int size;//size 表示我们从 packet->size 中得到的字节数
 	SDL_mutex *mutex;
 	SDL_cond *cond;
 } PacketQueue;
@@ -425,14 +425,17 @@ static int packet_queue_get(PacketQueue *q, AVPacket *packatToPop, int block)
 	//获取要加锁
 	SDL_LockMutex(q->mutex);
 
-	while (true) {
-		if (quit) {
+	while (true) 
+	{
+		if (quit)//是否停止 
+		{
 			ret = -1;
 			break;
 		}
 
-		pktToPop = q->first_pkt;
-		if (pktToPop) {
+		pktToPop = q->first_pkt;//从头部取
+		if (pktToPop)//队列有数据 
+		{
 			q->first_pkt = pktToPop->next;
 			if (!q->first_pkt)
 				q->last_pkt = NULL;
@@ -443,12 +446,14 @@ static int packet_queue_get(PacketQueue *q, AVPacket *packatToPop, int block)
 			ret = 1;
 			break;
 		}
-		else if (!block) {
+		else if (!block)//不是阻塞  
+		{
 			ret = 0;
 			break;
 		}
-		else {
-			SDL_CondWait(q->cond, q->mutex);
+		else 
+		{
+			SDL_CondWait(q->cond, q->mutex);//阻塞
 		}
 	}
 	SDL_UnlockMutex(q->mutex);
@@ -483,7 +488,7 @@ int packet_queue_put(PacketQueue* q, AVPacket*pkt)
 	q->last_pkt = pkt1;
 	q->nb_packets++;
 	q->size += pkt1->pkt.size;
-	SDL_CondSignal(q->cond);
+	SDL_CondSignal(q->cond);//唤起一个线程
 
 	SDL_UnlockMutex(q->mutex);
 }
@@ -491,7 +496,7 @@ int packet_queue_put(PacketQueue* q, AVPacket*pkt)
 //从packet队列解码出数据塞到audio_buf中
 int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int buf_size) 
 {
-	static AVFrame *decodedAudioFrame = avcodec_alloc_frame();
+	static AVFrame *decodedAudioFrame = avcodec_alloc_frame();//存放解码后的音频
 	if(decodedAudioFrame == NULL)
 	{
 		exit(1);
@@ -506,32 +511,36 @@ int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int b
 		while (pktTemp.size > 0)
 		{
 			//默认帧
-			avcodec_get_frame_defaults(decodedAudioFrame);
+			avcodec_get_frame_defaults(decodedAudioFrame);//格式化
 			
 			int hasGotFrame = 0;
-			//音频解码 返回长度
+			//音频解码 返回长度，成功hasGotFrame会被设置为1，否则为0
 			len1 = avcodec_decode_audio4(pAudioCodecCtx, decodedAudioFrame, &hasGotFrame, &pktTemp);
 
 
 			//检查是否有编码
-			if (len1 < 0) {
+			if (len1 < 0) 
+			{
 				pktTemp.size = 0;
 				break; // skip packet
 			}
 
-			if (hasGotFrame) {
+			if (hasGotFrame)//成功 
+			{
 				printf("\nGot frame!");
 
-				data_size = av_samples_get_buffer_size(NULL, pAudioCodecCtx->channels,
+				data_size = av_samples_get_buffer_size(NULL, pAudioCodecCtx->channels,//计算给定音频缓冲区大小，设置个字节对齐
 					decodedAudioFrame->nb_samples,
 					pAudioCodecCtx->sample_fmt, 1);
-				if (data_size > buf_size) {
+				if (data_size > buf_size)//大于设定的缓冲区大小，则取新大小 
+				{
 					data_size = buf_size;
 				}
-				memcpy(audio_buf, decodedAudioFrame->data[0], data_size);
+				memcpy(audio_buf, decodedAudioFrame->data[0], data_size);//解码后的数据放入缓存
 
 			}
-			else {
+			else 
+			{
 				data_size = 0;
 			}
 
@@ -539,15 +548,16 @@ int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int b
 			pktTemp.data += len1;
 			pktTemp.size -= len1;
 
-			if (data_size <= 0) {
+			if (data_size <= 0)//内存计算出错 
+			{
 				continue;
 			}
 
-			return data_size;
+			return data_size;//返回数据的大小
 		}
 
 
-		if (pkt.data)
+		if (pkt.data)//解码出错
 			av_free_packet(&pkt);
 
 		if (quit)
@@ -569,40 +579,46 @@ int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int b
 	}
 }
 
-//音频线程回调
-void audio_callback(void *userdata, Uint8 *stream, int len) {
+//音频线程回调，stream，要填充音频的缓冲区，len是缓冲区的长度，由系统提供
+void audio_callback(void *userdata, Uint8 *stream, int len) 
+{
 
 	//回调传入的解码器上下文
 	AVCodecContext *pAudioCodecCtx = (AVCodecContext *)userdata;
-	int len1, audio_size;
+	int len1, audio_size;//len1每次增加的数据大小
 
 	static uint8_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE * 3) / 2];
-	static unsigned int audio_buf_size = 0;
-	static unsigned int audio_buf_index = 0;
+	static unsigned int audio_buf_size = 0;//音频缓存大小
+	static unsigned int audio_buf_index = 0;//音频索引
 
 	while (len > 0) {
 		/// audio
-		if (audio_buf_index >= audio_buf_size) {
+		if (audio_buf_index >= audio_buf_size) 
+		{
 			//从队列里面读取出解码后的音频数据
 			audio_size = audio_decode_frame(pAudioCodecCtx, audio_buf, sizeof(audio_buf));
-			if (audio_size < 0) {
+			
+			if (audio_size < 0) 
+			{
 				/* If error, output silence */
 				audio_buf_size = 1024; // arbitrary?
 				memset(audio_buf, 0, audio_buf_size);
 			}
-			else {
-				audio_buf_size = audio_size;
+			else 
+			{
+				audio_buf_size = audio_size;//记录数据大小
 			}
 			audio_buf_index = 0;
 		}
 
-		len1 = audio_buf_size - audio_buf_index;
-		if (len1 > len)
+		len1 = audio_buf_size - audio_buf_index;//audio_buf剩余要读取的大小
+		if (len1 > len)//大于传进来音频空间的大小，则直接截断刚刚好为len
 			len1 = len;
+			//把数据放入stream
 		memcpy(stream, (uint8_t *)audio_buf + audio_buf_index, len1);
-		len -= len1;
-		stream += len1;
-		audio_buf_index += len1;
+		len -= len1;//stream剩余空间
+		stream += len1;//缓冲区指针后移
+		audio_buf_index += len1;//audio_buf读取缓冲区索引增加
 	}
 }
 
@@ -674,7 +690,7 @@ int _tmain(int args,_TCHAR* argv[])
 		return -1;
 	}
 
-	packet_queue_init(&audioq);
+	packet_queue_init(&audioq);//初始化任务结构体
 	
 	//初始化音频流的SDL  
 	SDL_AudioSpec   wanted_spec, spec;//spec用于存储实际的音频输出格式
@@ -755,9 +771,9 @@ int _tmain(int args,_TCHAR* argv[])
 			}
 			
 		}
-		else if(packet->stream_index == audioIndex)
+		else if(packet->stream_index == audioIndex)//音频
 		{
-			packet_queue_put(&audioq,packet);
+			packet_queue_put(&audioq,packet);//把数据放入队列
 		}
 		else
 		{
