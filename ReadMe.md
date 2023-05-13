@@ -45,14 +45,14 @@ void SaveFrame(AVFrame* pFrame, int width, int height, int iFrame)
 
 	//（2）打开文件
 	FILE *pFile;
-	pFile = fopen(szFileName, "wb");
+	pFile = fopen(szFileName, "wb");//二进制写
 	if (pFile == NULL)
 	{
 		return;
 	}
 
 	//（3）写入ppm文件的文件头 
-	fprintf(pFile, "P6\n%d %d\n255\n", width, height);
+	fprintf(pFile, "P6\n%d %d\n255\n", width, height);//文件的头部表示了图像的宽度和高度以及最大的 RGB 值的大小
 
 	//（4）写入ppm文件的内容
 	for (int i = 0; i < height; i++)
@@ -106,12 +106,12 @@ int _tmain(int argc, _TCHAR* argv[])
 		return -1; 
 	}
 
-	pCodecCtx = pFormatCtx->streams[videoStream]->codec;
+	pCodecCtx = pFormatCtx->streams[videoStream]->codec;//编解码器上下文
 
 	AVCodec *pCodec;
 
 
-	pCodec = avcodec_find_decoder(pCodecCtx->codec_id);
+	pCodec = avcodec_find_decoder(pCodecCtx->codec_id);//根据解码器的id查找解码器
 
 	if(pCodec == NULL)
 	{
@@ -125,15 +125,16 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 
 	AVFrame *pFrame;
-	pFrame = avcodec_alloc_frame();
+	pFrame = avcodec_alloc_frame();//存放解码后的帧
 
-	AVFrame *pFrameRGB = avcodec_alloc_frame();
+	AVFrame *pFrameRGB = avcodec_alloc_frame();//存放转码后的帧
 	if(pFrameRGB == NULL)
 	{
 		return -1;
 	}
 	uint8_t *buffer;
 	int numBytes;
+	//一帧图像的字节数
 	numBytes = avpicture_get_size(PIX_FMT_RGB24, pCodecCtx->width, pCodecCtx->height);
 
 	buffer = (uint8_t*)av_malloc(numBytes * sizeof(uint8_t));
@@ -164,10 +165,10 @@ int _tmain(int argc, _TCHAR* argv[])
 				++i;
 				if( i%120 == 1)
 				{
-					SaveFrame(pFrameRGB, pCodecCtx->width, pCodecCtx->height, i);
+					SaveFrame(pFrameRGB, pCodecCtx->width, pCodecCtx->height, i);//保存转码后的帧
 				}
 			}
-			av_free_packet(&packet);
+			av_free_packet(&packet);//释放内存，为下次做准备
 		}
 	}
 	av_free(buffer);
