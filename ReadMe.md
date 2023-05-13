@@ -677,14 +677,14 @@ int _tmain(int args,_TCHAR* argv[])
 	packet_queue_init(&audioq);
 	
 	//初始化音频流的SDL  
-	SDL_AudioSpec   wanted_spec, spec;
+	SDL_AudioSpec   wanted_spec, spec;//spec用于存储实际的音频输出格式
 	wanted_spec.freq = avAudioCodecCtx->sample_rate;				//采样率：
 	wanted_spec.format = AUDIO_S16SYS;								//格式：S16SYS signed 每个样本16位 SYS代表大小端跟系统一样
 	wanted_spec.channels = avAudioCodecCtx->channels;				//通道数
 	wanted_spec.silence = 0;										//静音的值 0代表静音 
 	wanted_spec.samples = SDL_AUDIO_BUFFER_SIZE;					//音频缓冲区的尺寸
 	wanted_spec.callback = audio_callback;							//回调函数
-	wanted_spec.userdata = avAudioCodecCtx;							//
+	wanted_spec.userdata = avAudioCodecCtx;							//用户数据指针，传递给回调函数
 	if (SDL_OpenAudio(&wanted_spec, &spec) < 0)
 	{
 		return -1;
@@ -692,7 +692,7 @@ int _tmain(int args,_TCHAR* argv[])
 
 
 	//这个函数一定要在SDL_OpenAudio之后调用 可以让你安全的初始化回调函数
-	SDL_PauseAudio(0);
+	SDL_PauseAudio(0);//开启音频播放
 
 
 
@@ -721,7 +721,7 @@ int _tmain(int args,_TCHAR* argv[])
 	int frameFinished;
 	AVPacket *packet = (AVPacket*)av_malloc(sizeof(AVPacket));
 	int YSize = avVideoCodecCtx->width*avVideoCodecCtx->height;
-	av_new_packet(packet, YSize);
+	av_new_packet(packet, YSize);//初始化packet字段，YSize代表缓冲区的大小
 
 	//（7）循环的读帧
 	while(av_read_frame(pFormatCtx,packet) >= 0)
