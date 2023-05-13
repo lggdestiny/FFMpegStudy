@@ -417,7 +417,7 @@ void packet_queue_init(PacketQueue*q)
 	q->mutex = SDL_CreateMutex();
 	q->cond = SDL_CreateCond();
 }
-//出队列
+//出队列，packatToPop为获取的packet数据包
 static int packet_queue_get(PacketQueue *q, AVPacket *packatToPop, int block)
 {
 	AVPacketList *pktToPop;
@@ -436,12 +436,12 @@ static int packet_queue_get(PacketQueue *q, AVPacket *packatToPop, int block)
 		pktToPop = q->first_pkt;//从头部取
 		if (pktToPop)//队列有数据 
 		{
-			q->first_pkt = pktToPop->next;
-			if (!q->first_pkt)
-				q->last_pkt = NULL;
+			q->first_pkt = pktToPop->next;//移动首指针
+			if (!q->first_pkt)//为空
+				q->last_pkt = NULL;//尾指针置空
 			q->nb_packets--;
-			q->size -= pktToPop->pkt.size;
-			*packatToPop = pktToPop->pkt;
+			q->size -= pktToPop->pkt.size;//指定packet里data的大小
+			*packatToPop = pktToPop->pkt;//拿到数据包
 			av_free(pktToPop);
 			ret = 1;
 			break;
@@ -477,7 +477,7 @@ int packet_queue_put(PacketQueue* q, AVPacket*pkt)
 
 	SDL_LockMutex(q->mutex);
 
-	if (!q->last_pkt)
+	if (!q->last_pkt)//尾指针为空，则表示队列为空，所以插入的是第一个元素
 	{
 		q->first_pkt = pkt1;
 	}
@@ -485,15 +485,15 @@ int packet_queue_put(PacketQueue* q, AVPacket*pkt)
 	{
 		q->last_pkt->next = pkt1;
 	}
-	q->last_pkt = pkt1;
-	q->nb_packets++;
-	q->size += pkt1->pkt.size;
+	q->last_pkt = pkt1;//尾指针后移
+	q->nb_packets++;//packet数量增加
+	q->size += pkt1->pkt.size;//总数据增加
 	SDL_CondSignal(q->cond);//唤起一个线程
 
 	SDL_UnlockMutex(q->mutex);
 }
 
-//从packet队列解码出数据塞到audio_buf中
+//从packet队列解码出数据塞到audio_buf中，解析完返回数据的大小
 int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int buf_size) 
 {
 	static AVFrame *decodedAudioFrame = avcodec_alloc_frame();//存放解码后的音频
@@ -502,10 +502,11 @@ int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int b
 		exit(1);
 	}
 
-	static AVPacket pkt, pktTemp;
-	int len1, data_size;
+//pkt用于保存从队列里拿到的数据，pktTemp临时保存拿到的数据解码
+	static AVPacket pkt, pktTemp;//静态变量
+	int len1, data_size;//data_size实际音频的大小
 
-	while(true) 
+	while(true)//循环解析 
 	{
 		//如果取出的数据大于0
 		while (pktTemp.size > 0)
@@ -528,11 +529,11 @@ int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int b
 			if (hasGotFrame)//成功 
 			{
 				printf("\nGot frame!");
-
-				data_size = av_samples_get_buffer_size(NULL, pAudioCodecCtx->channels,//计算给定音频缓冲区大小，设置个字节对齐
+				//计算给定音频缓冲区大小，设置个字节对齐为1
+				data_size = av_samples_get_buffer_size(NULL, pAudioCodecCtx->channels,
 					decodedAudioFrame->nb_samples,
 					pAudioCodecCtx->sample_fmt, 1);
-				if (data_size > buf_size)//大于设定的缓冲区大小，则取新大小 
+				if (data_size > buf_size)//实际需要的空间大于设定的缓冲区大小，则取新大小 
 				{
 					data_size = buf_size;
 				}
@@ -545,10 +546,10 @@ int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int b
 			}
 
 			printf("\nData size %d", data_size);
-			pktTemp.data += len1;
-			pktTemp.size -= len1;
+			pktTemp.data += len1;//数据指针偏移
+			pktTemp.size -= len1;//剩余数据的大小
 
-			if (data_size <= 0)//内存计算出错 
+			if (data_size <= 0)//内存计算出错，则继续下一个 
 			{
 				continue;
 			}
@@ -565,14 +566,16 @@ int audio_decode_frame(AVCodecContext *pAudioCodecCtx, uint8_t *audio_buf, int b
 			return -1;
 		}
 
+		//第一次进来
 		//从队列里面获取 这里是在音频线程 如果没有音频数据则会wait等待生产者的信号量
+		//从队列audioq拿到的数据存在pkt中
 		if (packet_queue_get(&audioq, &pkt, 1) < 0)
 		{
 			return -1;
 		}
 
 
-		av_init_packet(&pktTemp);
+		av_init_packet(&pktTemp);//初始packet
 
 		pktTemp.data = pkt.data;
 		pktTemp.size = pkt.size;
@@ -587,15 +590,16 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 	AVCodecContext *pAudioCodecCtx = (AVCodecContext *)userdata;
 	int len1, audio_size;//len1每次增加的数据大小
 
-	static uint8_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE * 3) / 2];
+	static uint8_t audio_buf[(AVCODEC_MAX_AUDIO_FRAME_SIZE * 3) / 2];//保存解析后的数据
 	static unsigned int audio_buf_size = 0;//音频缓存大小
 	static unsigned int audio_buf_index = 0;//音频索引
 
-	while (len > 0) {
+	while (len > 0) 
+	{
 		/// audio
-		if (audio_buf_index >= audio_buf_size) 
+		if (audio_buf_index >= audio_buf_size)//超出范围 
 		{
-			//从队列里面读取出解码后的音频数据
+			//从队列里面读取出解码后的音频数据，返回解析后的数据大小
 			audio_size = audio_decode_frame(pAudioCodecCtx, audio_buf, sizeof(audio_buf));
 			
 			if (audio_size < 0) 
@@ -608,7 +612,7 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 			{
 				audio_buf_size = audio_size;//记录数据大小
 			}
-			audio_buf_index = 0;
+			audio_buf_index = 0;//从0索引开始
 		}
 
 		len1 = audio_buf_size - audio_buf_index;//audio_buf剩余要读取的大小
@@ -617,7 +621,8 @@ void audio_callback(void *userdata, Uint8 *stream, int len)
 			//把数据放入stream
 		memcpy(stream, (uint8_t *)audio_buf + audio_buf_index, len1);
 		len -= len1;//stream剩余空间
-		stream += len1;//缓冲区指针后移
+		
+		stream += len1;//缓冲区写指针后移
 		audio_buf_index += len1;//audio_buf读取缓冲区索引增加
 	}
 }
