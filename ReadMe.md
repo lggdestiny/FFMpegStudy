@@ -304,6 +304,8 @@ int _tmain(int argc, _TCHAR* argv[])
 	}
 	SDL_Rect rect;
 	SDL_Surface* screen = SDL_SetVideoMode(avcodecContext->width,avcodecContext->height,0,0);
+	//SDL_YV12_OVERLAY：平面模式：Y + V + U
+	//SDL_IYUV_OVERLAY：平面模式：Y + U + V
 	SDL_Overlay* bmp = SDL_CreateYUVOverlay(avcodecContext->width, avcodecContext->height, SDL_YV12_OVERLAY, screen);
 	//-------SDL
 
@@ -329,6 +331,7 @@ int _tmain(int argc, _TCHAR* argv[])
 				sws_scale(img_convert_ctx, (const uint8_t* const*)nowAVFrame->data, nowAVFrame->linesize, 0, avcodecContext->height, nowYUVAVFrame->data, nowYUVAVFrame->linesize);
 
 				//-------SDL
+				//这里的SDL_YV12_OVERLAY：平面模式：Y + V + U
 				SDL_LockYUVOverlay(bmp);
 				bmp->pixels[0] = nowYUVAVFrame->data[0];
 				bmp->pixels[2] = nowYUVAVFrame->data[1];
